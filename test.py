@@ -13,9 +13,8 @@ class_factor = 1.4
 sum_factor = 0.8
 normalizing_factor = 1
 accuracy_factor = 8
-num_of_output = 6
+num_of_output = 2
 
-loss_fn = nn.NLLLoss()
 def load_data(path):
 
     data = []
@@ -39,15 +38,21 @@ tokenizer = AutoTokenizer.from_pretrained('./scibert_scivocab_uncased')
 # print(tokenizer(['citation']))
 
 ACL_TRAIN_PATH = './acl-arc/train.jsonl'
-ACL_TEST_PATH = './acl-arc/test.jsonl'
+# ACL_TEST_PATH = './acl-arc/test.jsonl'
+ACL_TEST_PATH = './output.jsonl'
 ACL_DEV_PATH = './acl-arc/dev.jsonl'
 
 train_data, test_data, dev_data = load_data(ACL_TRAIN_PATH), load_data(ACL_TEST_PATH), load_data(ACL_DEV_PATH)
 
 def process_intents(data):
+
+    data = [item for item in data if item['intent'] != 'HalfExtend']
+
     for item in data:
-        if item['intent'] == 'Extend':
-            continue
+        if item['intent'] == 'Extends' or item['intent'] == 'Extend':
+            item['intent'] = 'Extend'
+        elif item['intent'] == 'HalfExtend':
+            data.remove(item)
         else:
             item['intent'] = 'NotExtend'
     return data
@@ -55,6 +60,7 @@ train_data = process_intents(train_data)
 test_data = process_intents(test_data)
 dev_data = process_intents(dev_data)
 
+# print(train_data[0]['intent'])
 
 # train_data, test_data, dev_data = train_data[:40], test_data, dev_data
 bz = 290
@@ -75,7 +81,7 @@ dev_loader = dev.data_loader
 test = bert_process(test_data, batch_size=bz, pretrained_model_name=bertmodel_name)
 test_loader = test.data_loader
 
-network = CustomBertClassifier(hidden_dim= 100, bert_dim_size=bert_dim_size, num_of_output=6, model_name=bertmodel_name)
+network = CustomBertClassifier(hidden_dim= 100, bert_dim_size=bert_dim_size, num_of_output=2, model_name=bertmodel_name)
 
 def evaluate_model(network, data, data_object):
     batch_size = 0
@@ -83,8 +89,13 @@ def evaluate_model(network, data, data_object):
     losses = []
     accus = []
 
-    c = {str(i): 0 for i in range(6)}
-    p = {str(i): 0 for i in range(6)}
+    c = {"Extend": 0, "NotExtend": 0, "HalfExtend": 0}
+    p = {"Extend": 0, "NotExtend": 0, "HalfExtend": 0}
+
+    threshold = 0
+
+    f1 = F1Score(num_classes=3, average='macro').to(device)
+    accuracy = Accuracy(num_classes=3, average='macro').to(device)
 
     for batch in tqdm(data):
         x, y = batch
@@ -92,43 +103,55 @@ def evaluate_model(network, data, data_object):
         y = y.type(torch.LongTensor)
         y = y.to(device)
         sentences, citation_idxs, mask, token_id_types = x
-        sentences, citation_idxs, mask, token_id_types = sentences.to(device), citation_idxs.to(device), mask.to(device),token_id_types.to(device)
-        output = network(sentences, citation_idxs, mask, token_id_types, device=device)
-        # loss = F.cross_entropy(output, y, weight=torch.tensor([1.0, 5.151702786,7.234782609,43.78947368,52.82539683,55.46666667]).to(device))
-        # loss = F.nll_loss(output, y, weight=torch.tensor([1.0, 500.151702786,700.234782609,4300.78947368,5200.82539683,5500.46666667]).to(device))
+        sentences, citation_idxs, mask, token_id_types = sentences.to(device), citation_idxs.to(device), mask.to(device), token_id_types.to(device)
         
-        _, predicted = torch.max(output, dim=1)
-        loss = accuracy_factor * loss_fn(output, y) + class_factor * torch.log((torch.subtract(y, predicted)!=0).sum())
-        print("Accuracy Loss: ", accuracy_factor * loss_fn(output, y))
-        print("Class Loss: ", class_factor * torch.log((torch.subtract(y, predicted) != 0).sum()))
-        f1 = F1Score(num_classes=num_of_output, average='macro').to(device)
-        f1_detailed = F1Score(num_classes=num_of_output, average='none').to(device)
-        print("Specifically, ", f1_detailed(predicted, y))
-        # self.output_types2idx = {'Background':3, 'Uses':1, 'CompareOrContrast':2, 'Extend':4, 'Motivation':0, 'Future':5}
-        for x in y.cpu().detach().tolist():
-            c[str(x)] += 1
+        output = network(sentences, citation_idxs, mask, token_id_types, device=device)
+        
+        probabilities = torch.softmax(output, dim=1)
+        
+        prob_diff = torch.abs(probabilities[:, 0] - probabilities[:, 1])
+        final_predicted = torch.where(
+            prob_diff < threshold,
+            torch.tensor(2).to(device),
+            torch.argmax(probabilities, dim=1)
+        )
 
-        for pr in predicted.cpu().detach().tolist():
-            p[str(pr)] += 1
+        for true_label in y.cpu().detach().tolist():
+            if true_label == 0:
+                c["NotExtend"] += 1
+            elif true_label == 1:
+                c["Extend"] += 1
+            else:
+                c["HalfExtend"] += 1
 
-        accuracy = Accuracy().to(device)
-        f1 = f1(predicted, y)
-        ac = accuracy(predicted, y)
-        f1s.append(f1.cpu().detach().numpy())
+        for pr in final_predicted.cpu().detach().tolist():
+            if pr == 0:
+                p["NotExtend"] += 1
+            elif pr == 1:
+                p["Extend"] += 1
+            else:
+                p["HalfExtend"] += 1
+
+        loss_fn = nn.NLLLoss()
+
+        print(y)
+        
+        loss = loss_fn(output, y)  
+
+        f1 = F1Score(num_classes=3, average='macro').to(device)
+        accuracy = Accuracy(task="multiclass", num_classes=3, top_k=1).to(device)
+        
+        f1_score = f1(final_predicted, y)
+        acc = accuracy(final_predicted, y)
+        
+        f1s.append(f1_score.cpu().detach().numpy())
         losses.append(loss.cpu().detach().numpy())
-        accus.append(ac.cpu().detach().numpy())
+        accus.append(acc.cpu().detach().numpy())
 
     print('y_true: ', c)  
     print('y_pred: ',p)
-    print('y_types: ',data_object.output_types2idx)  
-
-    f1s = np.asarray(f1s)
-    f1 = f1s.mean()
-    accus = np.asarray(accus)
-    losses = np.asarray(losses)
-    accus = accus.mean()
-    loss = losses.mean()
-    print("Loss : %f, f1 : %f, accuracy: %f" % (loss, f1, accus))
+    print('y_types: ',data_object.output_types2idx) 
+    print("Loss : %f, f1 : %f, accuracy: %f" % (loss, np.mean(f1s), np.mean(accus)))
     return f1
 
 network.load_state_dict(torch.load("./best_models/bestmodel.npy", weights_only=True))

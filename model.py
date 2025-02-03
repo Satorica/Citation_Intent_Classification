@@ -8,7 +8,7 @@ from transformers import AutoModel
 
 
 class CustomBertClassifier(nn.Module):
-    def __init__(self, hidden_dim= 100, bert_dim_size=768, num_of_output=6, lstm_hidden = 100,proj_size=100, model_name = "bert-base-uncased"):
+    def __init__(self, hidden_dim= 100, bert_dim_size=768, num_of_output=2, lstm_hidden = 100,proj_size=100, model_name = "bert-base-uncased"):
         """
         """
         super(CustomBertClassifier, self).__init__()
@@ -20,7 +20,7 @@ class CustomBertClassifier(nn.Module):
         # self.bert_model = model
         self.relu = nn.ReLU()
         self.logsoftmax = nn.LogSoftmax(dim=1)
-        self.model = AutoModel.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained('./scibert_scivocab_uncased', local_files_only=True)
         for name, param in self.model.named_parameters():
             if 'classifier' not in name: # classifier layer
                 param.requires_grad = False

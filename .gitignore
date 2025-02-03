@@ -3,3 +3,8 @@ scicite/
 .vector_cache
 __pycache__/
 .vscode
+.idea
+best_models/
+xlData/
+bestmodel.npy
+scibert_scivocab_uncased/

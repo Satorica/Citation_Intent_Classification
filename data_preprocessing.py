@@ -5,8 +5,8 @@ from collections import defaultdict, Counter, OrderedDict
 import re
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-# from transformers import BertTokenizer
-from transformers import *
+from transformers import BertTokenizer
+# from transformers import *
 import json
 import matplotlib.pyplot as plt
 
@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 
 class bert_process:
 
-    def __init__(self, aclarc_data:list, scicite_data=None, confidence_level:float=1, cite2sentence_percent:float=0.15, max_len:int=300, 
-    batch_size:int=1, shuffle:bool=True, pretrained_model_name:str='bert-base-uncased', padding:str='max_length', repeat:list=[1]*6):
+    def __init__(self, aclarc_data:list, scicite_data=None, confidence_level:float=1, cite2sentence_percent:float=0.15, max_len:int=400, 
+    batch_size:int=1, shuffle:bool=True, pretrained_model_name:str='bert-base-uncased', padding:str='max_length', repeat:list=[1]*3):
         
         self.data = aclarc_data
         self.scicite_data = scicite_data
@@ -24,14 +24,14 @@ class bert_process:
         self.confidence_level = confidence_level
         self.cite2sentence_percent = cite2sentence_percent
         # self.label_map = {'background':'Background','method':'Uses','result':'CompareOrContrast'}
-        self.label_map = {'background':'Background','result':'CompareOrContrast'}
+        self.label_map = {'background':'NotExtend','method':'NotExtend','result':'NotExtend'}
         self.section_name_vocab = ['introduction','experiment','conclusion','related work','method','discussion','result','background']
 
         self.max_len = max_len
         self.padding = padding
         # tokenizer = AutoTokenizer.from_pretrained('allenai/scibert_scivocab_uncased')
         # model = AutoModel.from_pretrained('allenai/scibert_scivocab_uncased')
-        self.tokenizer = AutoTokenizer.from_pretrained('allenai/scibert_scivocab_uncased')
+        self.tokenizer = BertTokenizer.from_pretrained('./scibert_scivocab_uncased', local_files_only=True)
         # print(self.tokenizer(['[SEP]']))
         # self.tokenizer = BertTokenizer.from_pretrained(pretrained_model_name)
         self.citation_id = torch.tensor(8891) # id for citation
@@ -44,11 +44,10 @@ class bert_process:
         self.indexed_input = None
         self.indexed_output = None
         #  {'0': 3328, '1': 317, '2': 460, '3': 63, '4': 76, '5': 60}
-        # {'Background':3, 'Uses':1, 'CompareOrContrast':2, 'Extends':4, 'Motivation':0, 'Future':5}
-        # self.output_types2idx = {'Background':0, 'Uses':1, 'CompareOrContrast':2, 'Extends':3, 'Motivation':4, 'Future':5}
-        self.output_types2idx = {'Background':0, 'Uses':1, 'CompareOrContrast':2, 'Extends':3, 'Motivation':4, 'Future':5}
-
-        # self.output_types2idx = {'Background':2, 'Uses':4, 'CompareOrContrast':1, 'Extends':5, 'Motivation':3, 'Future':0}
+        # {'Background':3, 'Uses':1, 'CompareOrContrast':2, 'Extend':4, 'Motivation':0, 'Future':5}
+        # self.output_types2idx = {'Background':0, 'Uses':1, 'CompareOrContrast':2, 'Extend':3, 'Motivation':4, 'Future':5}
+        # self.output_types2idx = {'Background':0, 'Uses':1, 'CompareOrContrast':2, 'Extend':3, 'Motivation':4, 'Future':5}
+        self.output_types2idx = {'NotExtend':0, 'Extend':1, 'HalfExtend': 2}
         self.mask = None
         self.token_type_ids = None
 
@@ -74,7 +73,7 @@ class bert_process:
 
         # 'section_name': {'introduction' , 'experiments', None , 'conclusion', 'related work', 'method'}
 
-        # 'intent': {'Background', 'Uses', 'CompareOrContrast', 'Extends', 'Motivation', 'Future'}
+        # 'intent': {'Background', 'Uses', 'CompareOrContrast', 'Extend', 'Motivation', 'Future'}
 
 
 
