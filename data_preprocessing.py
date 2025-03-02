@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 class bert_process:
 
     def __init__(self, aclarc_data:list, scicite_data=None, confidence_level:float=1, cite2sentence_percent:float=0.15, max_len:int=400, 
-    batch_size:int=1, shuffle:bool=True, pretrained_model_name:str='bert-base-uncased', padding:str='max_length', repeat:list=[1]*3):
+    batch_size:int=1, shuffle:bool=True, pretrained_model_name:str='bert-base-uncased', padding:str='max_length', repeat:list=[1]*2):
         
         self.data = aclarc_data
         self.scicite_data = scicite_data
@@ -47,7 +47,7 @@ class bert_process:
         # {'Background':3, 'Uses':1, 'CompareOrContrast':2, 'Extend':4, 'Motivation':0, 'Future':5}
         # self.output_types2idx = {'Background':0, 'Uses':1, 'CompareOrContrast':2, 'Extend':3, 'Motivation':4, 'Future':5}
         # self.output_types2idx = {'Background':0, 'Uses':1, 'CompareOrContrast':2, 'Extend':3, 'Motivation':4, 'Future':5}
-        self.output_types2idx = {'NotExtend':0, 'Extend':1, 'HalfExtend': 2}
+        self.output_types2idx = {'NotExtend':0, 'Extend':1}
         self.mask = None
         self.token_type_ids = None
 
@@ -173,7 +173,7 @@ class bert_process:
             text, section_name = re.sub("@@CITATION", "@CITATION@", exa['cleaned_cite_text']), exa['section_name']
             raw_x.append('sentence : {} [SEP] section name : {}'.format(text, section_name))
 
-        encoded_x = self.tokenizer(raw_x, padding=self.padding, max_length=self.max_len, return_tensors='pt') # dict
+        encoded_x = self.tokenizer(raw_x, padding=self.padding, truncation=True, max_length=self.max_len, return_tensors='pt') # dict
         self.indexed_input, self.mask, self.token_type_ids  = encoded_x['input_ids'], encoded_x['attention_mask'], encoded_x['token_type_ids']
 
         self.cite_pos = []
@@ -192,6 +192,29 @@ class bert_process:
 
 
     def make_data_loader(self):
+        # dataset = Dataset(self.indexed_input, self.cite_pos, self.indexed_output, self.mask, self.token_type_ids)
+        # labels = self.indexed_output
+        # if not isinstance(labels, torch.Tensor):
+        #     labels = torch.tensor(labels)
+        # class_counts = torch.bincount(labels)
+        # class_weights = 1. / class_counts
+        # sample_weights = class_weights[labels]
+
+        # sampler = torch.utils.data.WeightedRandomSampler(
+        #     weights=sample_weights,
+        #     num_samples = len(sample_weights),
+        #     replacement=True
+        # )
+
+        # self.data_loader = torch.utils.data.DataLoader(
+        #     dataset,
+        #     batch_size=self.batch_size,
+        #     sampler=sampler,
+        #     shuffle=False
+        # )
+
+
+        # self.data_loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
         dataset = Dataset(self.indexed_input, self.cite_pos, self.indexed_output, self.mask, self.token_type_ids)
         self.data_loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)

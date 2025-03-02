@@ -8,3 +8,75 @@ best_models/
 xlData/
 bestmodel.npy
 scibert_scivocab_uncased/
+
+# Python相关
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# 模型和大型数据文件
+*.npy
+*.h5
+*.hdf5
+*.pkl
+*.model
+*.bin
+*.pt
+*.pth
+
+# 数据集和压缩文件
+*.tar.gz
+*.zip
+*.rar
+*.7z
+acl-arc.tar.gz
+scicite.tar.gz
+
+# 大型JSON文件和数据文件
+*.jsonl
+output.jsonl
+old.jsonl
+olda.jsonl
+xlACL.jsonl
+
+# 系统文件
+.DS_Store
+*.swp
+*.swo
+
+# 不忽略的文件类型（这些将被Git跟踪）
+!*.py
+!*.sh
+!requirements.txt
+!README.md
+!*.md
+!experiment-guide-for-devs.md
+
+# 特定目录中的所有内容，但保留目录结构
+scripts/*
+!scripts/*.py
+!scripts/*.sh

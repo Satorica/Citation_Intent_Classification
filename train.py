@@ -5,6 +5,7 @@ from torchmetrics import F1Score, Accuracy
 from model import CustomBertClassifier
 from data_preprocessing import bert_process
 import json
+import codecs
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict, Counter, OrderedDict
@@ -24,16 +25,20 @@ else:
     device = torch.device('cpu')
 
 def load_data(path):
-
     data = []
-    for x in open(path, "r"):
-        data.append(json.loads(x))
+    with codecs.open(path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            try:
+                data.append(json.loads(line.strip()))
+            except json.JSONDecodeError:
+                continue
     return data
 
 
 ACL_TRAIN_PATH = './acl-arc/train.jsonl'
-ACL_TEST_PATH = './acl-arc/test.jsonl'
-ACL_DEV_PATH = './acl-arc/dev.jsonl'
+ACL_TEST_PATH = './xlData/output.jsonl'
+ACL_TEST_PATH = './xlACL.jsonl'
+ACL_DEV_PATH = './dataset/dev.jsonl'
 
 train_data, test_data, dev_data = load_data(ACL_TRAIN_PATH), load_data(ACL_TEST_PATH), load_data(ACL_DEV_PATH)
 
@@ -43,13 +48,7 @@ SCICITE_DEV_PATH = './scicite/dev.jsonl'
 
 train_data_sci, test_data_sci, dev_data_sci = load_data(SCICITE_TRAIN_PATH), load_data(SCICITE_TEST_PATH), load_data(SCICITE_DEV_PATH)
 
-# def process_intents(data):
-#     for item in data:
-#         if item['intent'] == 'Extends':
-#             item['intent'] = 'Extend'
-#         else:
-#             item['intent'] = 'NotExtend'
-#     return data
+
 
 def process_intents(data):
 
@@ -67,11 +66,9 @@ train_data = process_intents(train_data)
 test_data = process_intents(test_data)
 dev_data = process_intents(dev_data)
 
-# train_data, test_data, dev_data = train_data[:40], test_data, dev_data
 bz = 300
-# bertmodel_name = 'bert-large-uncased'
 bertmodel_name = 'allenai/scibert_scivocab_uncased'
-# bertmodel_name = 'bert-base-uncased'
+repeat = [1, 50]
 
 if bertmodel_name == 'bert-base-uncased':
     bert_dim_size = 768
@@ -80,9 +77,6 @@ elif bertmodel_name == 'allenai/scibert_scivocab_uncased':
 else:
     bert_dim_size = 1024
 
-repeat = [1, 100, 1]
-
-# train = bert_process(train_data, batch_size=bz, pretrained_model_name=bertmodel_name)
 train = bert_process(train_data, train_data_sci ,batch_size=bz, pretrained_model_name=bertmodel_name, repeat=repeat)
 print("finish train process")
 train_loader = train.data_loader
@@ -102,7 +96,7 @@ network = CustomBertClassifier(hidden_dim= 100, bert_dim_size=bert_dim_size, num
 # loss_fn = nn.NLLLoss(weight=torch.tensor([1.0,2.735015773,2.842622951,13.76190476,11.40789474,14.45]).to(device))
 # 1	10.1829653	7.017391304	51.23809524	42.47368421	53.8
 # loss_fn = nn.NLLLoss(weight=torch.tensor([1.0,1.0,1.0,1.5,1.5,1.5]).to(device))
-loss_fn = nn.NLLLoss()
+loss_fn = nn.CrossEntropyLoss()
 
 optimizer = torch.optim.Adam(network.parameters(), weight_decay = 1e-5, lr=0.001)
 # optimizer = torch.optim.Adam(network.parameters(), lr=0.01)
@@ -193,8 +187,8 @@ def evaluate_model(network, data, data_object):
     losses = []
     accus = []
 
-    c = {"Extend": 0, "NotExtend": 0, "HalfExtend": 0}
-    p = {"Extend": 0, "NotExtend": 0, "HalfExtend": 0}
+    c = {"Extend": 0, "NotExtend": 0}
+    p = {"Extend": 0, "NotExtend": 0}
 
     threshold = 0
 
@@ -206,6 +200,8 @@ def evaluate_model(network, data, data_object):
         network.eval()
         y = y.type(torch.LongTensor)
         y = y.to(device)
+        # print("------Now printing x-------")
+        # print(x)
         sentences, citation_idxs, mask, token_id_types = x
         sentences, citation_idxs, mask, token_id_types = sentences.to(device), citation_idxs.to(device), mask.to(device), token_id_types.to(device)
         
@@ -237,8 +233,6 @@ def evaluate_model(network, data, data_object):
                 p["HalfExtend"] += 1
 
         loss_fn = nn.CrossEntropyLoss()
-
-        print(y)
         
         loss = loss_fn(output, y)  
 
